@@ -1,179 +1,197 @@
 
-# Website Visual Visual-Regression Comparator (Playwright + Pillow)
+# Site Visual Compare (Playwright + Python)
 
-Compare two websites (e.g., prod vs. preview) by taking screenshots at multiple viewports and computing pixel diffs. Includes two modes:
+A small, script-first toolkit to **visually compare a Base site vs. a Compare site** by taking screenshots and reporting pixel differences. It supports two ways of picking pages:
 
-- **Targeted compare**: run against a fixed list of paths (`visual_compare.py`).
-- **Crawler compare**: auto-crawl internal links on a base site, then compare page-by-page (`site_visual_crawler_compare.py`).
+- **Static list** – compare a fixed list of paths (`site_visual_compare_static.py`).
+- **Crawler** – auto-crawl internal links on the Base site, then compare the same paths on the Compare site (`site_visual_crawler_compare.py`).
 
-Both modes generate an **HTML report** and save PNGs under `visual_diff/`.
-
----
-
-## What’s in this repo
-
-- `visual_compare.py` – fixed-path visual comparison runner.
-- `site_visual_crawler_compare.py` – crawler that discovers internal links and compares them.
-- `.vscode/launch.json` – VS Code debug configuration to run `visual_compare.py`.
-
-> Note: The report currently shows **Base** and **Compare** images side-by-side. Diff/Highlight PNGs are still generated and saved in `visual_diff/images/` for offline inspection.
+Both modes can run across multiple viewports and generate a simple, self-contained **HTML report** under `visual_diff/report.html`.
 
 ---
 
-## Features
+## Contents
 
-- Headless Playwright browsing (or opt-in to use installed Edge/Chrome channels).
-- Multiple **viewports** (desktop & mobile examples included).
-- Optional **full-page** screenshots.
-- CSS overlay to **hide dynamic UI** (cookie banners, chat widgets, ads) and disable animations.
-- Optional **time freeze** to stabilize dates/times during rendering.
-- **Pixel diff metrics** (mismatched pixel count & percentage). Highlight PNGs in crawler mode.
-- Clean, single-file **HTML report** with lazy-loaded images.
+```
+site_visual_compare_static.py     # Static list visual compare (Base vs Compare)
+site_visual_crawler_compare.py    # Auto-crawler visual compare (Base vs Compare)
+.vscode/launch.json               # VS Code debug config (update program paths)
+```
+
+> The provided `launch.json` may point to `visual_compare.py`. Update `program` to one of the scripts above (see examples below).
 
 ---
 
 ## Requirements
 
-- Python 3.10+
-- Pip packages: `playwright`, `pillow`, `numpy`
-- Playwright browser binaries (installed via `playwright install`)
+- Python **3.9+**
+- Packages: `playwright`, `pillow`, `numpy`
+- Playwright browsers: run `python -m playwright install` at least once (or set `BROWSER_CHANNEL` to use your locally installed Edge/Chrome).
 
 ### Install
 
 ```bash
-# 1) Create and activate a virtual environment (recommended)
+# Create and activate a virtual environment
 python -m venv .venv
-# Windows
-.venv\Scripts\activate
 # macOS/Linux
 source .venv/bin/activate
+# Windows (PowerShell)
+# .venv\Scripts\Activate.ps1
 
-# 2) Install Python dependencies
+# Install dependencies
 pip install --upgrade pip
 pip install playwright pillow numpy
 
-# 3) Install Playwright browsers (Chromium by default)
+# Install Playwright browsers
 python -m playwright install
-# On Linux, if you need system dependencies too:
-python -m playwright install --with-deps
 ```
 
-> **Corporate networks**: To avoid downloading Playwright’s bundled Chromium, set `BROWSER_CHANNEL = "msedge"` or `"chrome"` in the scripts to use an already-installed browser.
-
 ---
 
-## Configuration
+## Quick Start
 
-Both scripts are configured via constants at the top of each file. Adjust as needed before running.
+### Option A: Static list compare
 
-### `visual_compare.py` (fixed list of paths)
+1) Open **`site_visual_compare_static.py`** and set:
 
-Key options:
+- `BASE_URL` – reference site (e.g., production)
+- `COMPARE_URL` – candidate site (e.g., staging/preview)
+- `PATHS` – list of URL paths to check, e.g. `["/", "/about"]`
 
-- `BASE_URL` / `COMPARE_URL`: The two environments to compare.
-- `PATHS`: List of routes to visit (e.g., `/`, `/products`, `/contact`).
-- `VIEWPORTS`: List of `(width, height)` tuples.
-- `FULL_PAGE`: Capture full-page screenshots when `True`.
-- `WAIT_TIME`: Seconds to wait after page load for UI to stabilize.
-- `HIDE_SELECTORS`: CSS selectors to hide (cookie banners, chat widgets, ads, ARIA-live regions, etc.).
-- `BROWSER_CHANNEL`: `None`, `"msedge"`, or `"chrome"`.
-- `HEADLESS`, `TIMEZONE_ID`, `LOCALE`, `FREEZE_TIME_ISO`.
-- `OUT_DIR`: Output directory (default `visual_diff/`).
-
-### `site_visual_crawler_compare.py` (auto-crawl)
-
-Adds crawling controls on top of the options above:
-
-- `START_PATHS`: Seed paths to start the crawl (default `['/']`).
-- `MAX_PAGES`: Safety cap for total pages to compare (default `50`).
-- `MAX_DEPTH`: BFS depth from each seed (default `2`).
-- `KEEP_QUERY`: When `True`, treats `?a=1` and `?a=2` as different pages.
-- `EXCLUDE_PATTERNS`: Regex list to skip carts, checkouts, login/admin, and static assets.
-- Generates **Highlight** PNGs that draw red rectangles around contiguous diff regions.
-
-### Hiding dynamic UI & freezing time
-
-- **Hiding UI**: Add selectors (e.g., `.cookie-banner`, `.chat-widget`, `[aria-live='polite']`) to `HIDE_SELECTORS` to reduce noise.
-- **Freeze time**: Set `FREEZE_TIME_ISO` (e.g., `"2025-01-01T00:00:00Z"`) to fix `Date.now()` and related timers for more stable renders.
-
----
-
-## Running
-
-From the project root (after configuring values inside the scripts):
-
-### Fixed-path compare
+2) Run:
 
 ```bash
-python visual_compare.py
+python site_visual_compare_static.py
 ```
 
-### Crawler compare
+**Outputs**
+- Per-viewport screenshots under `visual_diff/images/`:
+  - `{{path_slug}}_{{WIDTHxHEIGHT}}_base.png`
+  - `{{path_slug}}_{{WIDTHxHEIGHT}}_compare.png`
+- HTML summary: `visual_diff/report.html` (shows Base and Compare side-by-side with mismatch metrics).
+
+> Static mode includes quality-of-life tweaks for lazy images: it forces `<img loading="lazy">` to eager, progressively auto-scrolls to trigger lazy loaders, waits for images to complete, and then captures.
+
+---
+
+### Option B: Crawler compare
+
+1) Open **`site_visual_crawler_compare.py`** and set:
+
+- `BASE_URL`, `COMPARE_URL`
+- `START_PATHS` – crawl seeds (default `["/"]`)
+- `MAX_PAGES`, `MAX_DEPTH` – caps for breadth-first crawl
+- Optional: `KEEP_QUERY` (treat different query strings as separate pages), `EXCLUDE_PATTERNS` (regex paths to skip)
+
+2) Run:
 
 ```bash
 python site_visual_crawler_compare.py
 ```
 
-### VS Code
+**Outputs**
+- Per-viewport screenshots under `visual_diff/images/`:
+  - `..._base.png`, `..._compare.png`, plus `..._diff.png` and `..._highlight.png` (highlight boxes around change clusters)
+- HTML summary: `visual_diff/report.html` (currently shows Base & Compare panes; diff/highlight are saved to disk for manual inspection)
 
-A debug configuration is provided. Open the repo in VS Code, then run **Python: visual_compare** from the **Run and Debug** panel. You can duplicate that config for the crawler script if desired.
-
----
-
-## Output
-
-- HTML report at:
-  - `visual_diff/report.html`
-- Images under:
-  - `visual_diff/images/`
-    - `*_base.png` – screenshot from `BASE_URL`
-    - `*_compare.png` – screenshot from `COMPARE_URL`
-    - `*_diff.png` – pixel-diff image (always created)
-    - `*_highlight.png` – **crawler mode only**, rectangles around diff clusters
-
-> Filenames include a slugified path and viewport, e.g. `home_1366x768_base.png`.
-
-### Sample folder tree
-
-```
-visual_diff/
-├─ images/
-│  ├─ home_1366x768_base.png
-│  ├─ home_1366x768_compare.png
-│  ├─ home_1366x768_diff.png
-│  └─ ...
-└─ report.html
-```
+> Note: The crawler doesn’t currently auto-scroll to trigger lazy loaders before capture. If you rely on heavy lazy loading, you may prefer static mode or extend the crawler with similar lazy-image helpers.
 
 ---
 
-## Tips & Troubleshooting
+## Configuration (shared)
 
-- **False positives**: Add more selectors to `HIDE_SELECTORS` and increase `WAIT_TIME` slightly.
-- **Auth-protected pages**: These scripts don’t include auth flows. You can extend them to set cookies or use Playwright’s storage state.
-- **Blocked downloads**: Use `BROWSER_CHANNEL = "msedge"` or `"chrome"` to use a locally installed browser.
-- **Fonts**: The scripts wait for `document.fonts.ready` when available; ensure required web fonts are accessible.
-- **Long pages**: If `FULL_PAGE=True` is slow or memory-heavy, set it to `False` or scope your comparison to critical sections.
+Both scripts expose these common options at the top:
+
+- **`VIEWPORTS`**: list of `(width, height)` pairs, e.g. `[(1366, 768), (390, 844)]`.
+- **`FULL_PAGE`**: capture full page (`True`/`False`).
+- **`HEADLESS`**: run browser headless; set `False` to watch runs.
+- **`BROWSER_CHANNEL`**: `None` (Playwright’s bundled Chromium) or `"msedge"` / `"chrome"` to use an installed browser.
+- **`TIMEZONE_ID`, `LOCALE`**: emulate time zone and locale.
+- **`FREEZE_TIME_ISO`**: freeze time to a fixed instant (e.g., `"2025-01-01T00:00:00Z"`) for reproducible renders.
+- **`HIDE_SELECTORS`**: selectors hidden via injected CSS (useful for cookie banners, chat widgets, ads, etc.).
+- **`OUT_DIR`**: default `visual_diff`; images are under `visual_diff/images`.
+
+### Static-only helpers
+- **`IMAGE_WAIT_MS`**: max wait for images to complete.
+- **`SCROLL_STEP_PX`, `SCROLL_PAUSE_MS`**: progressive auto-scroll tuning to trigger lazy loaders.
+
+### Crawler-only controls
+- **`START_PATHS`**, **`MAX_PAGES`**, **`MAX_DEPTH`**: BFS crawl parameters.
+- **`KEEP_QUERY`**: include query strings in uniqueness if `True`.
+- **`EXCLUDE_PATTERNS`**: regex patterns to skip (e.g., `/admin`, `/login`, file extensions like `.(pdf|zip|jpg|png|svg|webp|ico)`).
 
 ---
 
-## .gitignore suggestion
+## How it works (high level)
 
-If you don’t want to commit large outputs:
+1. Navigate and wait for network to settle (`wait_until="networkidle"`), then attempt to wait for web fonts.
+2. Inject CSS that disables animations/transitions and hides configured selectors to reduce noise.
+3. *(Static only)* Force images to eager, progressively auto-scroll, and wait for images to be complete.
+4. Capture screenshots per viewport (scrolls to top before capture) with animations disabled.
+5. Compute pixel mismatch metrics (count and %). Crawler additionally saves a raw diff and a highlight image.
+6. Generate `visual_diff/report.html` summarizing the run with per-page, per-viewport tags.
 
+---
+
+## VS Code: launch configurations
+
+Update `.vscode/launch.json` to point at the script you want to run. Example:
+
+```jsonc
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Static Compare",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/site_visual_compare_static.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": { "PYTHONASYNCIODEBUG": "0" }
+    },
+    {
+      "name": "Python: Crawler Compare",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/site_visual_crawler_compare.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": { "PYTHONASYNCIODEBUG": "0" }
+    }
+  ]
+}
 ```
-/visual_diff/
-```
+
+---
+
+## Tips & troubleshooting
+
+- **Reduce false positives**: add cookie/chat/ads selectors to `HIDE_SELECTORS`.
+- **Corporate networks**: set `BROWSER_CHANNEL = "msedge"` or `"chrome"` to reuse locally installed browsers (avoids downloading the Playwright bundle).
+- **Determinism**: set `FREEZE_TIME_ISO`, `TIMEZONE_ID`, and `LOCALE`.
+- **Long pages**: prefer `FULL_PAGE=True` and ensure enough viewport height/scroll to render content prior to capture.
+- **Timeouts**: raise Playwright navigation timeout or stabilize content with a small `WAIT_TIME`.
+
+---
+
+## Roadmap (ideas)
+
+- Show `diff` / `highlight` panes directly in the crawler HTML report.
+- Thresholding / perceptual diffs to tolerate minor noise.
+- Parallelize per-viewport or per-path runs.
+- CLI flags (argparse) to avoid editing constants in the file.
 
 ---
 
 ## License
 
-Add your preferred license (e.g., MIT) here.
+Choose a license (e.g., MIT, Apache-2.0) and add it here.
 
 ---
 
-## Acknowledgments
+## Acknowledgements
 
-- Built with [Microsoft Playwright for Python](https://playwright.dev/python/) and [Pillow](https://python-pillow.org/).
+- [Playwright](https://playwright.dev/) for browser automation.
+- [Pillow](https://python-pillow.org/) and [NumPy](https://numpy.org/) for image processing and array ops.
 
